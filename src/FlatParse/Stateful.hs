@@ -460,7 +460,7 @@ byteString (B.PS (ForeignPtr bs fcontents) _ (I# len)) =
         let bs' = plusAddr# bs 8# in
         case gtAddr# bs' bsend of
           1# -> go8 bs bsend s n w
-          _  -> case eqWord# (indexWord64OffAddr# bs 0#) (indexWord64OffAddr# s 0#) of
+          _  -> case eqWord64# (indexWord64OffAddr# bs 0#) (indexWord64OffAddr# s 0#) of
             1# -> go64 bs' bsend (plusAddr# s 8#) n w
             _  -> (# Fail#, w #)
 
@@ -994,10 +994,10 @@ scan32# (W32# c) = Parser \fp !r eob s n ->
 
 -- | Unsafely read eight concrete bytes from the input. It's not checked that the input has
 --   enough bytes.
-scan64# :: Word -> Parser r e ()
-scan64# (W# c) = Parser \fp !r eob s n ->
+scan64# :: Word64 -> Parser r e ()
+scan64# (W64# c) = Parser \fp !r eob s n ->
   case indexWord64OffAddr# s 0# of
-    c' -> case eqWord# c c' of
+    c' -> case eqWord64# c c' of
       1# -> OK# () (plusAddr# s 8#) n
       _  -> Fail#
 {-# inline scan64# #-}
@@ -1007,13 +1007,13 @@ scanAny8# :: Parser r e Word8
 scanAny8# = Parser \fp !r eob s n -> OK# (W8# (indexWord8OffAddr# s 0#)) (plusAddr# s 1#) n
 {-# inline scanAny8# #-}
 
-scanPartial64# :: Int -> Word -> Parser r e ()
-scanPartial64# (I# len) (W# w) = Parser \fp !r eob s n ->
-  case indexWordOffAddr# s 0# of
+scanPartial64# :: Int -> Word64 -> Parser r e ()
+scanPartial64# (I# len) (W64# w) = Parser \fp !r eob s n ->
+  case indexWord64OffAddr# s 0# of
     w' -> case uncheckedIShiftL# (8# -# len) 3# of
-      sh -> case uncheckedShiftL# w' sh of
-        w' -> case uncheckedShiftRL# w' sh of
-          w' -> case eqWord# w w' of
+      sh -> case uncheckedShiftL64# w' sh of
+        w' -> case uncheckedShiftRL64# w' sh of
+          w' -> case eqWord64# w w' of
             1# -> OK# () (plusAddr# s len) n
             _  -> Fail#
 {-# inline scanPartial64# #-}
@@ -1162,10 +1162,10 @@ withAnyWord32# p = Parser \fp !r eob buf n -> case 4# <=# minusAddr# eob buf of
     w# -> runParser# (p w#) fp r eob (plusAddr# buf 4#) n
 {-# inline withAnyWord32# #-}
 
-withAnyWord64# :: (Word# -> Parser r e a) -> Parser r e a
+withAnyWord64# :: (Word64# -> Parser r e a) -> Parser r e a
 withAnyWord64# p = Parser \fp !r eob buf n -> case 8# <=# minusAddr# eob buf of
   0# -> Fail#
-  _  -> case indexWordOffAddr# buf 0# of
+  _  -> case indexWord64OffAddr# buf 0# of
     w# -> runParser# (p w#) fp r eob (plusAddr# buf 8#) n
 {-# inline withAnyWord64# #-}
 
@@ -1190,7 +1190,7 @@ withAnyInt32# p = Parser \fp !r eob buf n -> case 4# <=# minusAddr# eob buf of
     i# -> runParser# (p i#) fp r eob (plusAddr# buf 4#) n
 {-# inline withAnyInt32# #-}
 
-withAnyInt64# :: (Int# -> Parser r e a) -> Parser r e a
+withAnyInt64# :: (Int64# -> Parser r e a) -> Parser r e a
 withAnyInt64# p = Parser \fp !r eob buf n -> case 8# <=# minusAddr# eob buf of
   0# -> Fail#
   _  -> case indexInt64OffAddr# buf 0# of
@@ -1241,7 +1241,7 @@ anyWord64_ = () <$ anyWord64
 
 -- | Parse any 'Word'.
 anyWord :: Parser r e Word
-anyWord = withAnyWord64# (\w# -> pure (W# w#))
+anyWord = withAnyWord64# (\w# -> pure (W# (word64ToWord# w#)))
 {-# inline anyWord #-}
 
 -- | Skip any 'Word'.
@@ -1273,7 +1273,7 @@ anyInt64 = withAnyInt64# (\i# -> pure (I64# i#))
 
 -- | Parse any 'Int'.
 anyInt :: Parser r e Int
-anyInt = withAnyInt64# (\i# -> pure (I# i#))
+anyInt = withAnyInt64# (\i# -> pure (I# (int64ToInt# i#)))
 {-# inline anyInt #-}
 
 --------------------------------------------------------------------------------
@@ -1305,7 +1305,7 @@ anyWord64le = anyWord64
 
 -- | Parse any 'Word64' (big-endian).
 anyWord64be :: Parser r e Word64
-anyWord64be = withAnyWord64# (\w# -> pure (W64# (byteSwap# w#)))
+anyWord64be = withAnyWord64# (\w# -> pure (W64# (byteSwap64# w#)))
 {-# inline anyWord64be #-}
 
 --------------------------------------------------------------------------------
@@ -1337,7 +1337,7 @@ anyInt64le = anyInt64
 
 -- | Parse any 'Int64' (big-endian).
 anyInt64be :: Parser r e Int64
-anyInt64be = withAnyWord64# (\w# -> pure (I64# (word2Int# (byteSwap# w#))))
+anyInt64be = withAnyWord64# (\w# -> pure (I64# (intToInt64# (word2Int# (byteSwap# (word64ToWord# w#))))))
 {-# inline anyInt64be #-}
 
 --------------------------------------------------------------------------------
